@@ -138,7 +138,7 @@ class ServerlessPlugin {
         }).then(resp => {
             const output = resp.Stacks[0].Outputs;
             let apiUrl;
-            output.filter(entry => entry.OutputKey.match('ServiceEndpoint')).forEach(entry => apiUrl = entry.OutputValue);
+            output.filter(entry => entry.OutputKey.match(/ServiceEndpoint\b/)).forEach(entry => apiUrl = entry.OutputValue);
             const apiId = apiUrl.match('https:\/\/(.*)\\.execute-api')[1];
             resolve(apiId);
         });
