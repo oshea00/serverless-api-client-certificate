@@ -62,26 +62,32 @@ class ServerlessPlugin {
     // - one hasn't been assigned
     this.serverless.cli.log("Check Client Certificate...")
     var apiId = await this.getApiId()
-    var stage = await this.getStage(apiId,this.stage)
-    if (stage.clientCertificateId) {
-      var expirationDate = await this.getExpiration(stage.clientCertificateId)
-      var daysRemaining = this.datediff(new Date(),expirationDate)
-      this.serverless.cli.log(`Client Certificate Expiration: ${expirationDate}`)
-      if (daysRemaining <= this.custom.daysLeft) {
-        if (this.custom.rotateCerts) {
-          var newCert = await this.generateCertificate()
-          this.serverless.cli.log(`certificate has expired - rotating to new certificate ${newCert}`)
-          await this.assignCertificateToStage(apiId,this.stage,newCert)
-          this.createDeployment(apiId)
+    if (apiId) {
+        var stage = await this.getStage(apiId,this.stage)
+        this.serverless.cli.log(`apiId = ${apiId}, stage cert id = ${stage.clientCertificateId}`)
+        if (stage.clientCertificateId) {
+          var expirationDate = await this.getExpiration(stage.clientCertificateId)
+          var daysRemaining = this.datediff(new Date(),expirationDate)
+          this.serverless.cli.log(`Client Certificate Expiration: ${expirationDate}`)
+          if (daysRemaining <= this.custom.daysLeft) {
+            if (this.custom.rotateCerts) {
+              var newCert = await this.generateCertificate()
+              this.serverless.cli.log(`certificate has expired - rotating to new certificate ${newCert}`)
+              await this.assignCertificateToStage(apiId,this.stage,newCert)
+              this.createDeployment(apiId)
+            } else {
+              this.serverless.cli.log('WARNING: certificate has expired - set rotateCerts: true to rotate')
+            }
+          }  
         } else {
-          this.serverless.cli.log('WARNING: certificate has expired - set rotateCerts: true to rotate')
+          this.serverless.cli.log("Creating Certificate...")
+          var certId = await this.generateCertificate()
+          this.serverless.cli.log(`Created certificate: ${certId}`)
+          await this.assignCertificateToStage(apiId,this.stage,certId)
+          this.createDeployment(apiId)
         }
-      }  
     } else {
-      var certId = await this.generateCertificate()
-      this.serverless.cli.log(`Created certificate: ${certId}`)
-      await this.assignCertificateToStage(apiId,this.stage,certId)
-      this.createDeployment(apiId)
+        this.serverless.cli.log("No REST ApiId to assign certificate to.")
     }
   }
 
@@ -138,8 +144,14 @@ class ServerlessPlugin {
         }).then(resp => {
             const output = resp.Stacks[0].Outputs;
             let apiUrl;
+            let apiId;
             output.filter(entry => entry.OutputKey.match(/ServiceEndpoint\b/)).forEach(entry => apiUrl = entry.OutputValue);
-            const apiId = apiUrl.match('https:\/\/(.*)\\.execute-api')[1];
+            if (apiUrl) {
+                apiId = apiUrl.match('https:\/\/(.*)\\.execute-api')[1];
+            }
+            else{
+                apiId = null
+            }
             resolve(apiId);
         });
     });
